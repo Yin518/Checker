@@ -85,7 +85,7 @@ class GameControl:
         self.board_draw.hide_piece(piece_clicked["index"])
         self.set_held_piece(piece_clicked["index"], board_pieces[piece_clicked["index"]], mouse_pos)
     
-    def release_piece(self):
+    def release_piece(self, pos):
         if self.held_piece is None:
             return
 
