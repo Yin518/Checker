@@ -20,9 +20,13 @@ class Client:
         self.server_port = int(input("Enter server port (default 5555): ") or 5555)
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket.connect((self.server_ip, self.server_port))
-
-        # 選擇遊戲模式
-        self.game_mode = input("Select game mode (1 for Player vs Player, 2 for Player vs Computer): ")
+        
+        # **選擇遊戲模式並檢查輸入**
+        while True:
+            self.game_mode = input("Select game mode (1 for Player vs Player, 2 for Player vs Computer): ")
+            if self.game_mode in ["1", "2"]:
+                break
+            print("Invalid input. Please enter 1 or 2.")
         self.client_socket.send(self.game_mode.encode())  # 發送遊戲模式到伺服器
 
         self.game_control = GameControl(player_color="W", is_computer_opponent=self.game_mode == "2")

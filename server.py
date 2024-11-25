@@ -33,9 +33,22 @@ class Server:
 
             move_data = pickle.loads(data)
             print("Received move data:", move_data)
-            self.game_control.update_game_state(move_data)
+
+            # 確認是否是玩家的回合
+            if self.game_control.get_turn() == "W":  # 玩家回合 (假設玩家是白棋)
+                self.game_control.update_game_state(move_data)
+
+                # 更新遊戲狀態後切換回合
+                if self.game_control.get_turn() == "B" and self.game_control.ai_control:
+                    self.game_control.move_ai()
+            
+            # 如果不是玩家的回合，拒絕接受移動並返回錯誤信息
+            else:
+                print("Error: Move received during AI's turn!")
+
             # 發送回更新後的遊戲狀態
             self.client_socket.send(pickle.dumps(self.game_control.get_game_state()))
+
 
     def close(self):
         self.client_socket.close()

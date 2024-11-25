@@ -86,27 +86,34 @@ class GameControl:
         self.set_held_piece(piece_clicked["index"], board_pieces[piece_clicked["index"]], mouse_pos)
     
     def release_piece(self, pos):
+        if self.winner:  # 如果有贏家，阻止進一步操作
+            print(f"Game over. {self.winner} wins!")
+            return None
+    
         if self.held_piece is None:
-            return
+            return None  # 無效點擊，不執行任何操作
 
         position_released = self.held_piece.check_collision(self.board_draw.get_move_marks())
         moved_index = self.board_draw.show_piece()
         piece_moved = self.board.get_piece_by_index(moved_index)
 
-        # Only moves the piece if dropped in a proper move mark        
         if position_released is not None:
             self.board.move_piece(moved_index, self.board_draw.get_position_by_rect(position_released))
             self.board_draw.set_pieces(self.board_draw.get_piece_properties(self.board))
             self.winner = self.board.get_winner()
 
-            # Check if player can eat another piece, granting an extra turn.
+            # 確認是否有連續吃棋機會（跳吃限制）
             jump_moves = list(filter(lambda move: move["eats_piece"] == True, piece_moved.get_moves(self.board)))
-            
-            if len(jump_moves) == 0 or piece_moved.get_has_eaten() == False:
+            if len(jump_moves) == 0 or not piece_moved.get_has_eaten():
+                # 只有當沒有連續吃棋時，才切換回合
                 self.turn = "B" if self.turn == "W" else "W"
 
         self.held_piece = None
         self.board_draw.set_move_marks([])
+
+        # 如果AI是下一個回合，則讓AI自動下棋
+        if self.turn == "B" and self.ai_control:
+            self.move_ai()
 
     def set_held_piece(self, index, piece, mouse_pos):
         # Creates a HeldPiece object to follow the mouse
@@ -115,28 +122,48 @@ class GameControl:
         self.held_piece = HeldPiece(surface, offset)
 
     def move_ai(self):
-        # Gets best move from an AI instance and moves it.
-        if self.turn == "W":
-            return
-
-        optimal_move = self.ai_control.get_move(self.board)
-        index_moved = -1
-        piece_moved = None
-
-        for index, piece in enumerate(self.board.get_pieces()):
-            if piece.get_position() == optimal_move["position_from"]:
-                index_moved = index
-                piece_moved = piece
+        while self.turn == "B":
+            move = self.ai.get_move(self.board)
+            if not move:
+                print("[DEBUG] No valid moves for AI. Ending turn.")
                 break
-        else:
-            raise RuntimeError("AI was supposed to return a move from an existing piece but found none.")
-        
-        self.board.move_piece(index_moved, int(optimal_move["position_to"]))
-        self.board_draw.set_pieces(self.board_draw.get_piece_properties(self.board))
-        self.winner = self.board.get_winner()
 
-        # Check if AI can eat another piece, granting an extra turn.
-        jump_moves = list(filter(lambda move: move["eats_piece"] == True, piece_moved.get_moves(self.board)))
+            self.board.move_piece(move["from_index"], move["to_index"])
+            self.board_draw.set_pieces(self.board_draw.get_piece_properties(self.board))
 
-        if len(jump_moves) == 0 or piece_moved.get_has_eaten() == False:
-            self.turn = "B" if self.turn == "W" else "W"
+            # 檢查是否可以連續吃
+            piece = self.board.get_piece_by_index(move["to_index"])
+            jump_moves = list(filter(lambda move: move["eats_piece"], piece.get_moves(self.board)))
+
+            if not jump_moves or not piece.get_has_eaten():  # 無法連續吃或吃子結束
+                self.turn = "W"  # 切換到玩家回合
+                break
+
+    def update_game_state(self, move_data):
+        # 玩家回合處理
+        if self.turn == "W":
+            success = self.board.move_piece(move_data["from_index"], move_data["to_index"])
+            if not success:
+                print("[ERROR] Move failed. Invalid move.")
+                return  # 無效移動，直接返回
+                
+            self.board_draw.set_pieces(self.board_draw.get_piece_properties(self.board))
+            self.winner = self.board.get_winner()
+
+            # 判斷是否需要保留玩家回合
+            piece = self.board.get_piece_by_index(move_data["to_index"])
+            jump_moves = list(filter(lambda move: move["eats_piece"], piece.get_moves(self.board)))
+
+            if piece.get_has_eaten() and len(jump_moves) > 0:
+                print("[DEBUG] Player retains turn for continuous jump.")
+                return  # 保留玩家回合
+
+            # 切換到 AI 回合
+            self.turn = "B"
+
+        # AI 回合處理
+        elif self.turn == "B" and self.ai_control:
+            self.move_ai()
+
+        # 同步遊戲狀態
+        self.sync_game_state()

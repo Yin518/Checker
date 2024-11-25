@@ -46,45 +46,20 @@ class AI:
 			return minimum
 	
 
-	def get_move(self, current_board):
-		# Receives a Board object, returns the move it finds best suited.
-		board_color_up = current_board.get_color_up()
-		current_pieces = current_board.get_pieces()
-		next_turn = "W" if self.color == "B" else "B"
-		player_pieces = list(map(lambda piece: piece if piece.get_color() == self.color else False, current_pieces))
-		possible_moves = []
+	def get_move(self, board):
 		move_scores = []
+		for move in self.get_all_possible_moves(board):
+			score = self.evaluate_move(move, board)
+			move_scores.append(score)
 
-		for index, piece in enumerate(player_pieces):
-			if piece == False:
-				continue
-			
-			for move in piece.get_moves(current_board):
-				# The value of the key "piece" is the index of the piece on player_pieces that can make the move assigned on the key "move".
-				possible_moves.append({"piece": index, "move": move})
-		
-		# If any jump move is available, only jump moves can be made (checkers rule).
-		jump_moves = list(filter(lambda move: move["move"]["eats_piece"] == True, possible_moves))
-
-		if len(jump_moves) != 0:
-			possible_moves = jump_moves
-
-		# Calls minimax for all possible moves and stores the moves with higher values.
-		for move in possible_moves:
-			aux_board = Board(deepcopy(current_pieces), board_color_up)
-			aux_board.move_piece(move["piece"], int(move["move"]["position"]))
-			move_scores.append(self.minimax(aux_board, False, 2, next_turn))
+		if not move_scores:  # 如果沒有可行的移動
+			print("[ERROR] No valid moves available for AI.")
+			return None  # 返回空表示無移動可能
 
 		best_score = max(move_scores)
-		best_moves = []
+		best_index = move_scores.index(best_score)
+		return self.get_all_possible_moves(board)[best_index]
 
-		for index, move in enumerate(possible_moves):
-			if move_scores[index] == best_score:
-				best_moves.append(move)
-		
-		# Chooses a random move just in case there are more than one "good" move, then returns it properly.
-		move_chosen = choice(best_moves)
-		return {"position_to": move_chosen["move"]["position"], "position_from": player_pieces[move_chosen["piece"]].get_position()}
 
 
 	def get_value(self, board):
