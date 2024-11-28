@@ -41,6 +41,7 @@ def register_or_login(client_socket):
                 client_socket.send("[ERROR] Invalid username or password. Try again.\n".encode())
         else:
             client_socket.send("[ERROR] Invalid choice. Please enter 'R' to register or 'L' to login.\n".encode())
+
 def broadcast(sockets, message):
     for sock in sockets:
         try:
@@ -48,99 +49,123 @@ def broadcast(sockets, message):
         except Exception as e:
             print(f"[ERROR] Unable to send message to {sock}: {e}")
 
-def handle_game(player1_socket, player2_socket):
+def intial_game(player1_socket, player2_socket):
     players = [player1_socket, player2_socket]
     broadcast(players, "Both players have joined. The game is starting.\n")
 
     # Player 1 設定範圍
-    player1_socket.send("You are Player 1. Please set the game range.\n".encode())
-    
+    player1_socket.send("[PROMPT] You are Player 1. Please set the game range.\n".encode())
+
     # Lower bound
-    player1_socket.send("[PROMPT] Enter the lower bound: ".encode())
-    while True:
+    lower = None
+    while lower is None:
+        player1_socket.send("[PROMPT] Enter the lower bound: ".encode())
         try:
-            lower = int(player1_socket.recv(1024).decode())
-            break
+            lower = int(player1_socket.recv(1024).decode().strip())
         except ValueError:
-            player1_socket.send("[PROMPT] Invalid input. Please enter an integer for the lower bound: ".encode())
-    
+            player1_socket.send("[ERROR] Invalid input. Please enter an integer for the lower bound.\n".encode())
+
     # Upper bound
-    player1_socket.send("[PROMPT] Enter the upper bound: ".encode())
-    while True:
+    upper = None
+    while upper is None:
+        player1_socket.send("[PROMPT] Enter the upper bound: ".encode())
         try:
-            upper = int(player1_socket.recv(1024).decode())
+            upper = int(player1_socket.recv(1024).decode().strip())
             if upper > lower:
                 break
             else:
-                player1_socket.send("[PROMPT] Upper bound must be greater than the lower bound. Try again: ".encode())
+                player1_socket.send("[ERROR] Upper bound must be greater than the lower bound.\n".encode())
+                upper = None
         except ValueError:
-            player1_socket.send("[PROMPT] Invalid input. Please enter an integer for the upper bound: ".encode())
+            player1_socket.send("[ERROR] Invalid input. Please enter an integer for the upper bound.\n".encode())
 
+    # 隨機產生目標數字
     target_number = random.randint(lower, upper)
+
+    # 廣播範圍
+    broadcast(players, f"The range is {lower} ~ {upper}\nGAME START !!!\n")
+    return target_number, lower, upper
+
+
+def handle_game(player1_socket, player2_socket, target_number, lower, upper):
     current_player = 0  # 0 for Player 1, 1 for Player 2
     players = [(player1_socket, "Player 1"), (player2_socket, "Player 2")]
 
+    # 遊戲邏輯
     while True:
         player_socket, player_name = players[current_player]
         other_player_socket, _ = players[1 - current_player]
 
-        other_player_socket.send(f"It is {player_name}'s turn.\n".encode())
-        player_socket.send(f"The current range is {lower} to {upper}.\n".encode())
-        player_socket.send(f"[PROMPT] {player_name}, make a guess: ".encode())
+        # 發送回合訊息
+        player_socket.send(f"[INFO] The current range is {lower} to {upper}.\n".encode())
+        other_player_socket.send(f"[INFO] It is {player_name}'s turn.\n".encode())
 
+        # 獲取猜測
         guess = None
         while guess is None:
+            player_socket.send(f"[PROMPT] {player_name}, make a guess: ".encode())
             try:
-                guess = int(player_socket.recv(1024).decode())
+                guess = int(player_socket.recv(1024).decode().strip())
                 if lower <= guess <= upper:
                     break
                 else:
-                    player_socket.send(f"[PROMPT] Invalid guess. Enter a number within {lower} and {upper}: ".encode())
+                    player_socket.send(f"[ERROR] Invalid guess. Enter a number within {lower} and {upper}.\n".encode())
             except ValueError:
-                player_socket.send("[PROMPT] Invalid input. Please enter a valid number: ".encode())
+                player_socket.send("[ERROR] Invalid input. Please enter a valid number.\n".encode())
 
+        # 判斷猜測結果
         if guess == target_number:
-            player_socket.send("Correct! You've won the game!\n".encode())
-            other_player_socket.send("The other player guessed correctly. You lose.\n".encode())
+            player_socket.send("[SUCCESS] Correct! You've won the game!\n".encode())
+            other_player_socket.send("[INFO] The other player guessed correctly. You lose.\n".encode())
             break
         elif guess < target_number:
             lower = max(lower, guess + 1)
-            player_socket.send("Too low!\n".encode())
+            player_socket.send("[INFO] Too low!\n".encode())
         else:
             upper = min(upper, guess - 1)
-            player_socket.send("Too high!\n".encode())
+            player_socket.send("[INFO] Too high!\n".encode())
 
-        current_player = 1 - current_player  # Switch turns
+        # 更新範圍
+        broadcast([player1_socket, player2_socket], f"[INFO] Updated range is {lower} to {upper}.\n")
 
+        # 切換回合
+        current_player = 1 - current_player
+
+    # 遊戲結束，關閉連線
+    for sock, _ in players:
+        sock.send("[INFO] The game has ended. Closing connection.\n".encode())
+        sock.close()
 
 def handle_client(client_socket, address):
     print(f"[NEW CONNECTION] {address} connected.")
     username = register_or_login(client_socket)
 
     with lock:
+        if len(active_players) >= 2:
+            client_socket.send("[INFO] Server is full. Please try again later.\n".encode())
+            client_socket.close()
+            return
         active_players.append((username, client_socket))
 
-    # Wait for two players to connect
+    # Wait for another player to join
     while True:
         with lock:
             if len(active_players) == 2:
                 break
 
-    # Notify both players that the game is starting
+    # Get both players
     with lock:
         player1_socket = active_players[0][1]
         player2_socket = active_players[1][1]
 
-    # player1_socket.send("[INFO] Both players have joined. The game is starting.\n".encode())
-    # player2_socket.send("[INFO] Both players have joined. The game is starting.\n".encode())
-
+    target_number,lower, upper = intial_game(player1_socket, player2_socket)
+    print ("start")
     # Start the game
-    handle_game(player1_socket, player2_socket)
+    handle_game(player1_socket, player2_socket ,target_number,lower, upper)
 
-    # Clean up after the game
+    # Clean up
     with lock:
         active_players.remove((username, client_socket))
-    client_socket.close()
     print(f"[DISCONNECTED] {address} disconnected.")
 
 def start_server():

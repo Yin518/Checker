@@ -1,5 +1,6 @@
 import socket
 import sys
+
 def start_client():
     if len(sys.argv) != 2:
         print("Usage: python c.py <server_ip>")
@@ -8,20 +9,32 @@ def start_client():
     server_ip = sys.argv[1]
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    client.connect((server_ip, 8888))
+    try:
+        client.connect((server_ip, 8888))
+    except Exception as e:
+        print(f"[ERROR] Unable to connect to server: {e}")
+        sys.exit(1)
+
+    last_message = ""  # 用於追蹤最後一條訊息，避免重複處理
 
     while True:
         try:
             message = client.recv(1024).decode()
             if not message:
-                break
+                break  # 連線中斷
 
+            # 確保訊息完整性
+            if message == last_message:
+                continue  # 跳過重複訊息
+
+            last_message = message  # 更新最後一條訊息
+            
             if "[PROMPT]" in message:
-                print(message.replace("[PROMPT]", "").strip(), end="")
+                print(message.replace("[PROMPT]", ""), end="")
                 response = input().strip()
                 client.send(response.encode())
             else:
-                print(message.strip())  # 不重複輸出
+                print(message)
         except ConnectionResetError:
             print("[DISCONNECTED] Server disconnected.")
             break
@@ -30,18 +43,6 @@ def start_client():
             break
 
     client.close()
-
-
-def validate_input(prompt, response):
-    if not response:
-        return False
-    if "Do you want to register or login?" in prompt:
-        return response.upper() in ["R", "L"]
-    if "Enter a username:" in prompt or "Enter a password:" in prompt:
-        return response.isalnum() and len(response) > 0
-    if "make a guess" in prompt:
-        return response.isdigit()
-    return True
 
 if __name__ == "__main__":
     start_client()
