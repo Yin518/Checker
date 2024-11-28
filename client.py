@@ -1,8 +1,14 @@
 import socket
-
+import sys
 def start_client():
+    if len(sys.argv) != 2:
+        print("Usage: python c.py <server_ip>")
+        sys.exit(1)
+        
+    server_ip = sys.argv[1]
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.connect(("127.0.0.1", 8888))
+
+    client.connect((server_ip, 8888))
 
     while True:
         try:
