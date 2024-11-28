@@ -4,7 +4,7 @@ import random
 
 # Game Configuration
 users = {}  # Dictionary to store username and password
-active_players = []  # To track active players
+player_queue = []  # Queue to store connected players
 lock = threading.Lock()
 
 def register_or_login(client_socket):
@@ -41,13 +41,6 @@ def register_or_login(client_socket):
                 client_socket.send("[ERROR] Invalid username or password. Try again.\n".encode())
         else:
             client_socket.send("[ERROR] Invalid choice. Please enter 'R' to register or 'L' to login.\n".encode())
-
-def broadcast(sockets, message):
-    for sock in sockets:
-        try:
-            sock.send(message.encode())
-        except Exception as e:
-            print(f"[ERROR] Unable to send message to {sock}: {e}")
 
 def intial_game(player1_socket, player2_socket):
     players = [player1_socket, player2_socket]
@@ -86,28 +79,44 @@ def intial_game(player1_socket, player2_socket):
     broadcast(players, f"The range is {lower} ~ {upper}\nGAME START !!!\n")
     return target_number, lower, upper
 
-
-def handle_game(player1_socket, player2_socket, target_number, lower, upper):
+def handle_game(player1_socket, player2_socket):
+    target_number, lower, upper = intial_game(player1_socket, player2_socket)
     current_player = 0  # 0 for Player 1, 1 for Player 2
     players = [(player1_socket, "Player 1"), (player2_socket, "Player 2")]
+    last_guess = None  # 用於記錄上一位玩家的猜測
 
-    # 遊戲邏輯
     while True:
         player_socket, player_name = players[current_player]
-        other_player_socket, _ = players[1 - current_player]
+        other_player_socket, other_player_name = players[1 - current_player]
 
-        # 發送回合訊息
+        # 如果範圍縮小到唯一值，直接宣告獲勝
+        if lower == upper:
+            if lower == target_number:
+                broadcast([player1_socket, player2_socket], f"[INFO] The target number is {lower}.\n")
+                player_socket.send("[SUCCESS] The remaining range equals the target number! You've won the game!\n".encode())
+                other_player_socket.send(f"[INFO] {player_name} won the game because the remaining range equals the target number.\n".encode())
+            else:
+                broadcast([player1_socket, player2_socket], f"[ERROR] Unexpected state: lower != target_number.\n")
+            break
+
+        # 向當前玩家提供範圍訊息，並告知上一位玩家的猜測
+        
+        if last_guess is not None:
+            player_socket.send(f"[INFO] {other_player_name} guessed {last_guess}.\n".encode())
+            
+        broadcast([player1_socket, player2_socket], f"It's {player_name}'s turn.\n")
+
         player_socket.send(f"[INFO] The current range is {lower} to {upper}.\n".encode())
-        other_player_socket.send(f"[INFO] It is {player_name}'s turn.\n".encode())
 
-        # 獲取猜測
-        guess = None
-        while guess is None:
+        # 獲取當前玩家的猜測
+        valid_guess = False
+        while not valid_guess:
             player_socket.send(f"[PROMPT] {player_name}, make a guess: ".encode())
             try:
                 guess = int(player_socket.recv(1024).decode().strip())
                 if lower <= guess <= upper:
-                    break
+                    valid_guess = True  # 有效猜測
+                    last_guess = guess  # 更新上一位玩家的猜測
                 else:
                     player_socket.send(f"[ERROR] Invalid guess. Enter a number within {lower} and {upper}.\n".encode())
             except ValueError:
@@ -116,16 +125,16 @@ def handle_game(player1_socket, player2_socket, target_number, lower, upper):
         # 判斷猜測結果
         if guess == target_number:
             player_socket.send("[SUCCESS] Correct! You've won the game!\n".encode())
-            other_player_socket.send("[INFO] The other player guessed correctly. You lose.\n".encode())
+            other_player_socket.send(f"[INFO] {player_name} guessed the target number ({target_number}). You lose.\n".encode())
             break
         elif guess < target_number:
             lower = max(lower, guess + 1)
-            player_socket.send("[INFO] Too low!\n".encode())
+            player_socket.send("[INFO] Too low! Try again.\n".encode())
         else:
             upper = min(upper, guess - 1)
-            player_socket.send("[INFO] Too high!\n".encode())
+            player_socket.send("[INFO] Too high! Try again.\n".encode())
 
-        # 更新範圍
+        # 廣播更新範圍給所有玩家
         broadcast([player1_socket, player2_socket], f"[INFO] Updated range is {lower} to {upper}.\n")
 
         # 切換回合
@@ -136,37 +145,26 @@ def handle_game(player1_socket, player2_socket, target_number, lower, upper):
         sock.send("[INFO] The game has ended. Closing connection.\n".encode())
         sock.close()
 
+
+def broadcast(sockets, message):
+    for sock in sockets:
+        try:
+            sock.send(message.encode())
+        except Exception as e:
+            print(f"[ERROR] Unable to send message to {sock}: {e}")
+
 def handle_client(client_socket, address):
     print(f"[NEW CONNECTION] {address} connected.")
     username = register_or_login(client_socket)
 
     with lock:
-        if len(active_players) >= 2:
-            client_socket.send("[INFO] Server is full. Please try again later.\n".encode())
-            client_socket.close()
-            return
-        active_players.append((username, client_socket))
+        player_queue.append((username, client_socket))
 
-    # Wait for another player to join
-    while True:
-        with lock:
-            if len(active_players) == 2:
-                break
-
-    # Get both players
-    with lock:
-        player1_socket = active_players[0][1]
-        player2_socket = active_players[1][1]
-
-    target_number,lower, upper = intial_game(player1_socket, player2_socket)
-    print ("start")
-    # Start the game
-    handle_game(player1_socket, player2_socket ,target_number,lower, upper)
-
-    # Clean up
-    with lock:
-        active_players.remove((username, client_socket))
-    print(f"[DISCONNECTED] {address} disconnected.")
+        if len(player_queue) == 2:
+            player1_socket = player_queue[0][1]
+            player2_socket = player_queue[1][1]
+            threading.Thread(target=handle_game, args=(player1_socket, player2_socket)).start()
+            player_queue.clear()
 
 def start_server():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -176,8 +174,7 @@ def start_server():
 
     while True:
         client_socket, address = server.accept()
-        thread = threading.Thread(target=handle_client, args=(client_socket, address))
-        thread.start()
+        threading.Thread(target=handle_client, args=(client_socket, address)).start()
         print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 1}")
 
 if __name__ == "__main__":
