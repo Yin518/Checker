@@ -125,7 +125,7 @@ class ClientGUI:
             self.client.send(username.encode())  # 单独发送用户名
             self.client.send(password.encode())  # 单独发送密码
             response = self.client.recv(1024).decode()
-            if response == "REGISTER_SUCCESS":
+            if response.startswith("[INFO] Registration successful!"):
                 messagebox.showinfo("Registration Successful", "You can now log in!")
                 self.create_main_menu()
             else:
