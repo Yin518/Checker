@@ -78,65 +78,79 @@ def intial_game(player1_socket, player2_socket):
     return target_number, lower, upper
 
 def handle_game(player1_socket, player2_socket):
-    target_number, lower, upper = intial_game(player1_socket, player2_socket)
-    current_player = 0  # 0 for Player 1, 1 for Player 2
-    players = [(player1_socket, "Player 1"), (player2_socket, "Player 2")]
-    last_guess = None  # 用於記錄上一位玩家的猜測
+    while True:  # 增加循環以支持多輪遊戲
+        target_number, lower, upper = intial_game(player1_socket, player2_socket)
+        current_player = 0  # 0 for Player 1, 1 for Player 2
+        players = [(player1_socket, "Player 1"), (player2_socket, "Player 2")]
+        last_guess = None  # 用於記錄上一位玩家的猜測
 
-    while True:
-        player_socket, player_name = players[current_player]
-        other_player_socket, other_player_name = players[1 - current_player]
+        while True:
+            player_socket, player_name = players[current_player]
+            other_player_socket, other_player_name = players[1 - current_player]
 
-        # 如果範圍縮小到唯一值，直接宣告獲勝
-        if lower == upper:
-            if lower == target_number:
-                broadcast([player1_socket, player2_socket], f"[INFO] The target number is {lower}.\n")
-                player_socket.send("[SUCCESS] The remaining range equals the target number! You've won the game!\n".encode())
-                other_player_socket.send(f"[INFO] {player_name} won the game because the remaining range equals the target number.\n".encode())
-            else:
-                broadcast([player1_socket, player2_socket], f"[ERROR] Unexpected state: lower != target_number.\n")
-            break
-
-        # 向當前玩家提供範圍訊息，並告知上一位玩家的猜測
-        
-        if last_guess is not None:
-            player_socket.send(f"[INFO] {other_player_name} guessed {last_guess}.\n".encode())
-            
-        broadcast([player1_socket, player2_socket], f"It's {player_name}'s turn.\n")
-
-        player_socket.send(f"[INFO] The current range is {lower} to {upper}.\n".encode())
-
-        # 獲取當前玩家的猜測
-        valid_guess = False
-        while not valid_guess:
-            player_socket.send(f"[PROMPT] {player_name}, make a guess: ".encode())
-            try:
-                guess = int(player_socket.recv(1024).decode().strip())
-                if lower <= guess <= upper:
-                    valid_guess = True  # 有效猜測
-                    last_guess = guess  # 更新上一位玩家的猜測
+            # 如果範圍縮小到唯一值，直接宣告獲勝
+            if lower == upper:
+                if lower == target_number:
+                    broadcast([player1_socket, player2_socket], f"[INFO] The target number is {lower}.\n")
+                    player_socket.send("[SUCCESS] The remaining range equals the target number! You've won the game!\n".encode())
+                    other_player_socket.send(f"[INFO] {player_name} won the game because the remaining range equals the target number.\n".encode())
                 else:
-                    player_socket.send(f"[ERROR] Invalid guess. Enter a number within {lower} and {upper}.\n".encode())
-            except ValueError:
-                player_socket.send("[ERROR] Invalid input. Please enter a valid number.\n".encode())
+                    broadcast([player1_socket, player2_socket], f"[ERROR] Unexpected state: lower != target_number.\n")
+                break
 
-        # 判斷猜測結果
-        if guess == target_number:
-            player_socket.send("[SUCCESS] Correct! You've won the game!\n".encode())
-            other_player_socket.send(f"[INFO] {player_name} guessed the target number ({target_number}). You lose.\n".encode())
-            break
-        elif guess < target_number:
-            lower = max(lower, guess + 1)
-            player_socket.send("[INFO] Too low! Try again.\n".encode())
+            # 向當前玩家提供範圍訊息，並告知上一位玩家的猜測
+            if last_guess is not None:
+                player_socket.send(f"[INFO] {other_player_name} guessed {last_guess}.\n".encode())
+            
+            broadcast([player1_socket, player2_socket], f"It's {player_name}'s turn.\n")
+
+            player_socket.send(f"[INFO] The current range is {lower} to {upper}.\n".encode())
+
+            # 獲取當前玩家的猜測
+            valid_guess = False
+            while not valid_guess:
+                player_socket.send(f"[PROMPT] {player_name}, make a guess: ".encode())
+                try:
+                    guess = int(player_socket.recv(1024).decode().strip())
+                    if lower <= guess <= upper:
+                        valid_guess = True  # 有效猜測
+                        last_guess = guess  # 更新上一位玩家的猜測
+                    else:
+                        player_socket.send(f"[ERROR] Invalid guess. Enter a number within {lower} and {upper}.\n".encode())
+                except ValueError:
+                    player_socket.send("[ERROR] Invalid input. Please enter a valid number.\n".encode())
+
+            # 判斷猜測結果
+            if guess == target_number:
+                player_socket.send("[SUCCESS] Correct! You've won the game!\n".encode())
+                other_player_socket.send(f"[INFO] {player_name} guessed the target number ({target_number}). You lose.\n".encode())
+                break
+            elif guess < target_number:
+                lower = max(lower, guess + 1)
+                player_socket.send("[INFO] Too low! Try again.\n".encode())
+            else:
+                upper = min(upper, guess - 1)
+                player_socket.send("[INFO] Too high! Try again.\n".encode())
+
+            # 廣播更新範圍給所有玩家
+            broadcast([player1_socket, player2_socket], f"[INFO] Updated range is {lower} to {upper}.\n")
+
+            # 切換回合
+            current_player = 1 - current_player
+
+        # 遊戲結束，詢問玩家是否繼續
+        player1_socket.send("[PROMPT] Do you want to play again? (yes/no): ".encode())
+        player2_socket.send("[PROMPT] Do you want to play again? (yes/no): ".encode())
+
+        response1 = player1_socket.recv(1024).decode().strip().lower()
+        response2 = player2_socket.recv(1024).decode().strip().lower()
+
+        if response1 == "yes" and response2 == "yes":
+            broadcast([player1_socket, player2_socket], "[INFO] Both players agreed to play again. Starting a new game...\n")
+            continue  # 重新開始遊戲
         else:
-            upper = min(upper, guess - 1)
-            player_socket.send("[INFO] Too high! Try again.\n".encode())
-
-        # 廣播更新範圍給所有玩家
-        broadcast([player1_socket, player2_socket], f"[INFO] Updated range is {lower} to {upper}.\n")
-
-        # 切換回合
-        current_player = 1 - current_player
+            broadcast([player1_socket, player2_socket], "[INFO] One or both players chose to exit. The game has ended.\n")
+            break
 
     # 遊戲結束，關閉連線
     for sock, _ in players:

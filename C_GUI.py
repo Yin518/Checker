@@ -19,7 +19,7 @@ class ClientGUI:
         self.master = master
         self.master.title("終極密碼")
         
-        # Set the window size to 800x600
+        # Set the window size
         self.master.geometry("600x400")
 
         self.server_ip = server_ip
@@ -140,7 +140,7 @@ class ClientGUI:
             messagebox.showerror("Invalid Input", "Username or password is invalid.")
 
     def enter_chat(self):
-        """進入聊天界面"""
+        """進入遊玩介面"""
         self.clear_window()
 
         self.chat_display = scrolledtext.ScrolledText(self.master, wrap=tk.WORD, state='disabled', height=20, width=50)
@@ -149,7 +149,6 @@ class ClientGUI:
         self.user_input = tk.Entry(self.master, width=40)
         self.user_input.pack(pady=5)
 
-        # 放大發送按鈕
         tk.Button(self.master, text="Send", command=self.send_response, width=20, height=2, font=("Arial", 14)).pack(pady=5)
 
         self.running = True
@@ -171,7 +170,12 @@ class ClientGUI:
                 if not message:
                     break
 
-                self.append_message(message.strip())
+                if "[PROMPT] Do you want to play again?" in message:
+                    self.append_message(message.strip())
+                    response = messagebox.askyesno("Game Over", "Do you want to play again?")
+                    self.client.send("yes".encode() if response else "no".encode())
+                else:
+                    self.append_message(message.strip())
         except Exception as e:
             self.append_message(f"[ERROR] {e}")
         finally:
