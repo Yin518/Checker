@@ -19,6 +19,9 @@ class ClientGUI:
         self.master = master
         self.master.title("終極密碼")
         
+        # Set the window size to 800x600
+        self.master.geometry("600x400")
+
         self.server_ip = server_ip
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.prompt_message = ""
@@ -39,9 +42,10 @@ class ClientGUI:
 
         tk.Label(self.master, text="Welcome! Please Login or Register.", font=("Arial", 16)).pack(pady=20)
 
-        tk.Button(self.master, text="Login", command=self.login).pack(pady=10)
-        tk.Button(self.master, text="Register", command=self.register).pack(pady=10)
-
+        # 增加按鈕大小
+        tk.Button(self.master, text="Login", command=self.login, width=20, height=2, font=("Arial", 14)).pack(pady=10)
+        tk.Button(self.master, text="Register", command=self.register, width=20, height=2, font=("Arial", 14)).pack(pady=10)
+        
     def wait_for_other_player(self):
         """等待其他玩家連線的畫面"""
         self.clear_window()
@@ -71,8 +75,9 @@ class ClientGUI:
         self.password_entry = tk.Entry(self.master, show="*")
         self.password_entry.pack()
 
-        tk.Button(self.master, text="Submit", command=self.submit_login).pack(pady=10)
-        tk.Button(self.master, text="Back", command=self.create_main_menu).pack(pady=5)
+        # 放大提交按鈕
+        tk.Button(self.master, text="Submit", command=self.submit_login, width=20, height=2, font=("Arial", 14)).pack(pady=10)
+        tk.Button(self.master, text="Back", command=self.create_main_menu, width=20, height=2, font=("Arial", 14)).pack(pady=5)
 
     def register(self):
         """切換到註冊介面"""
@@ -88,8 +93,9 @@ class ClientGUI:
         self.password_entry = tk.Entry(self.master, show="*")
         self.password_entry.pack()
 
-        tk.Button(self.master, text="Submit", command=self.submit_register).pack(pady=10)
-        tk.Button(self.master, text="Back", command=self.create_main_menu).pack(pady=5)
+        # 放大提交按鈕
+        tk.Button(self.master, text="Submit", command=self.submit_register, width=20, height=2, font=("Arial", 14)).pack(pady=10)
+        tk.Button(self.master, text="Back", command=self.create_main_menu, width=20, height=2, font=("Arial", 14)).pack(pady=5)
 
     def submit_login(self):
         """處理登入邏輯"""
@@ -143,7 +149,8 @@ class ClientGUI:
         self.user_input = tk.Entry(self.master, width=40)
         self.user_input.pack(pady=5)
 
-        tk.Button(self.master, text="Send", command=self.send_response).pack(pady=5)
+        # 放大發送按鈕
+        tk.Button(self.master, text="Send", command=self.send_response, width=20, height=2, font=("Arial", 14)).pack(pady=5)
 
         self.running = True
         self.receive_thread = threading.Thread(target=self.receive_messages, daemon=True)
