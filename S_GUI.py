@@ -7,38 +7,61 @@ users = {}  # Dictionary to store username and password
 player_queue = []  # Queue to store connected players
 lock = threading.Lock()
 
+
+
 def register_or_login(client_socket):
     while True:
-        
-        #CLIENT按下登入或註冊按鈕
-        choice = client_socket.recv(1024).decode().strip().upper()
+        try:
+            # 紀錄接收到的選擇
+            data = client_socket.recv(1024).decode()
+            # 根據分隔符 | 來拆分資料
+            if data:
+                parts = data.split("|")
+                choice = parts[0]  # 登入或註冊
+                username = parts[1]  # 用戶名
+                password = parts[2]  # 密碼
+                # choice = client_socket.recv(1024).decode().strip().upper()
+                print(f"[DEBUG] Received choice: {choice}")
 
-        if choice == 'R':
-            
-            username = client_socket.recv(1024).decode().strip()
-            password = client_socket.recv(1024).decode().strip()
-            
-            if username in users:
-                            client_socket.send("[ERROR] Username already exists. Try logging in.\n".encode())
-                            continue
-            with lock:
-                users[username] = password
+                if choice == 'R':  # 註冊流程
+                    # username = client_socket.recv(1024).decode().strip()
+                    print(f"[DEBUG] Received username for registration: {username}")
 
-            client_socket.send("[INFO] Registration successful! You can now log in.\n".encode())
-        elif choice == 'L':
-            #client_socket.send("[PROMPT] Enter your username: ".encode())
-            username = client_socket.recv(1024).decode().strip()
+                    # password = client_socket.recv(1024).decode().strip()
+                    print(f"[DEBUG] Received password for registration")
 
-            #lient_socket.send("[PROMPT] Enter your password: ".encode())
-            password = client_socket.recv(1024).decode().strip()
+                    if username in users:
+                        client_socket.send("[ERROR] Username already exists. Try logging in.\n".encode())
+                        continue
 
-            if users.get(username) == password:
-                client_socket.send("[INFO] Login successful! Please wait for another player to join.\n".encode())
-                return username
-            else:
-                client_socket.send("[ERROR] Invalid username or password. Try again.\n".encode())
-        else:
-            client_socket.send("[ERROR] Invalid choice. Please enter 'R' to register or 'L' to login.\n".encode())
+                    with lock:
+                        users[username] = password
+                    client_socket.send("[INFO] Registration successful! You can now log in.\n".encode())
+
+                elif choice == 'L':  # 登入流程
+                    # username = client_socket.recv(1024).decode().strip()
+                    print(f"[DEBUG] Received username for login: {username}")
+
+                    # password = client_socket.recv(1024).decode().strip()
+                    print(f"[DEBUG] Received password for login")
+
+                    if users.get(username) == password:
+                        client_socket.send("[INFO] Login successful! Please wait for another player to join.\n".encode())
+                        return username
+                    else:
+                        client_socket.send("[ERROR] Invalid username or password. Try again.\n".encode())
+                else:
+                    client_socket.send("[ERROR] Invalid choice. Please enter 'R' to register or 'L' to login.\n".encode())
+
+        except ConnectionResetError:
+            print("[INFO] Client disconnected unexpectedly.")
+            client_socket.close()
+            return None
+        except Exception as e:
+            print(f"[ERROR] Unexpected error: {e}")
+            client_socket.close()
+            return None
+
 
 def intial_game(player1_socket, player2_socket):
     players = [player1_socket, player2_socket]

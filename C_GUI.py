@@ -104,9 +104,12 @@ class ClientGUI:
 
         if validate_input("Enter a username:", username) and validate_input("Enter a password:", password):
             #self.client.send(f"[LOGIN]{username}:{password}".encode())
-            self.client.send("L".encode())  # 告诉服务器这是登录请求
-            self.client.send(username.encode())  # 单独发送用户名
-            self.client.send(password.encode())  # 单独发送密码
+            login_data = f"L|{username}|{password}"
+            print(f"Sending login data: {login_data}")  # 輸出發送的資料，以便調試
+            self.client.send(login_data.encode())
+            # self.client.send("L".encode())  # 告诉服务器这是登录请求
+            # self.client.send(username.encode())  # 单独发送用户名
+            # self.client.send(password.encode())  # 单独发送密码
 
             #接收帳密結果
             response = self.client.recv(1024).decode()
@@ -127,9 +130,13 @@ class ClientGUI:
 
         if validate_input("Enter a username:", username) and validate_input("Enter a password:", password):
             #self.client.send(f"[REGISTER]{username}:{password}".encode())
-            self.client.send("R".encode())  # 告诉服务器这是注册请求
-            self.client.send(username.encode())  # 单独发送用户名
-            self.client.send(password.encode())  # 单独发送密码
+            # self.client.send("R".encode())  # 告诉服务器这是注册请求
+            # self.client.send(username.encode())  # 单独发送用户名
+            # self.client.send(password.encode())  # 单独发送密码
+            # 用 | 分隔註冊請求的不同部分
+            register_data = f"R|{username}|{password}"
+            self.client.send(register_data.encode())
+            print(f"Sending login data: {register_data}")  # 輸出發送的資料，以便調試
             response = self.client.recv(1024).decode()
             if response.startswith("[INFO] Registration successful!"):
                 messagebox.showinfo("Registration Successful", "You can now log in!")
