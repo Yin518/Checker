@@ -107,9 +107,6 @@ class ClientGUI:
             login_data = f"L|{username}|{password}"
             print(f"Sending login data: {login_data}")  # 輸出發送的資料，以便調試
             self.client.send(login_data.encode())
-            # self.client.send("L".encode())  # 告诉服务器这是登录请求
-            # self.client.send(username.encode())  # 单独发送用户名
-            # self.client.send(password.encode())  # 单独发送密码
 
             #接收帳密結果
             response = self.client.recv(1024).decode()
@@ -181,6 +178,10 @@ class ClientGUI:
                     self.append_message(message.strip())
                     response = messagebox.askyesno("Game Over", "Do you want to play again?")
                     self.client.send("yes".encode() if response else "no".encode())
+                elif "[GAME END]" in message:  # 檢查是否收到遊戲結束訊息
+                    self.append_message(message.strip())
+                    self.reset_to_main_menu()  # 返回主選單
+                    break  # 結束接收循環
                 else:
                     self.append_message(message.strip())
         except Exception as e:
@@ -189,6 +190,13 @@ class ClientGUI:
             self.running = False
             self.client.close()
             self.append_message("[DISCONNECTED] Server disconnected.")
+            self.reset_to_main_menu()
+            
+    def reset_to_main_menu(self):
+        """返回到主選單"""
+        self.clear_window()  # 清除當前視圖
+        self.create_main_menu()  # 重新建立主選單
+
 
     def append_message(self, message):
         """將訊息附加到聊天區域"""
