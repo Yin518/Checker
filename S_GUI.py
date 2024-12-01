@@ -100,8 +100,27 @@ def intial_game(player1_socket, player2_socket):
     broadcast(players, f"The range is {lower} ~ {upper}\nGAME START !!!\n")
     return target_number, lower, upper
 
+def handle_chat(player_sockets):
+    """處理玩家之間的聊天功能"""
+    while True:
+        for sock in player_sockets:
+            try:
+                message = sock.recv(1024).decode()
+                if message.startswith("[CHAT]"):
+                    # 廣播聊天訊息給所有玩家
+                    chat_message = message[len("[CHAT]"):].strip()
+                    broadcast(player_sockets, f"[CHAT] {chat_message}\n")
+            except Exception as e:
+                print(f"[ERROR] Chat handling error: {e}")
+                return
+            
 def handle_game(player1_socket, player2_socket,player1_name, player2_name):
     try:
+        # 啟動聊天執行緒
+        chat_thread = threading.Thread(target=handle_chat, args=([player1_socket, player2_socket],))
+        chat_thread.daemon = True
+        chat_thread.start()
+        
         while True:  # 增加循環以支持多輪遊戲
             target_number, lower, upper = intial_game(player1_socket, player2_socket)
             current_player = 0  # 0 for Player 1, 1 for Player 2

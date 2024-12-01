@@ -3,7 +3,7 @@ import sys
 import threading
 import tkinter as tk
 from tkinter import messagebox, scrolledtext
-
+from queue import Queue
 
 def validate_input(prompt, response):
     """驗證輸入是否有效"""
@@ -25,6 +25,10 @@ class ClientGUI:
         self.server_ip = server_ip
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.prompt_message = ""
+
+        # 設定兩個隊列：一個用來處理遊戲訊息，另一個用來處理聊天訊息
+        self.game_queue = Queue()
+        self.chat_queue = Queue()
 
         # Connect to server
         try:
@@ -146,35 +150,71 @@ class ClientGUI:
     def enter_chat(self):
         """進入遊玩介面"""
         self.clear_window()
+        
+        # 主框架，用於左右佈局
+        main_frame = tk.Frame(self.master)
+        main_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.chat_display = scrolledtext.ScrolledText(self.master, wrap=tk.WORD, state='disabled', height=20, width=50)
-        self.chat_display.pack(padx=10, pady=10)
+        # 左邊遊戲框
+        game_frame = tk.Frame(main_frame)
+        game_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        self.user_input = tk.Entry(self.master, width=40)
-        self.user_input.pack(pady=5)
+        tk.Label(game_frame, text="Game Messages", font=("Arial", 14)).pack(anchor="nw", padx=5, pady=5)
 
-        tk.Button(self.master, text="Send", command=self.send_response, width=20, height=2, font=("Arial", 14)).pack(pady=5)
+        self.game_display = scrolledtext.ScrolledText(game_frame, wrap=tk.WORD, state='disabled', height=20, width=30)
+        self.game_display.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        self.game_input = tk.Entry(game_frame, width=20)
+        self.game_input.pack(pady=5)
+
+        tk.Button(game_frame, text="Send Number" , command=self.send_game_messages, width=20, height=2, font=("Arial", 12)).pack(pady=5)
+
+    
+        # 右邊聊天訊息框
+        chat_frame = tk.Frame(main_frame)
+        chat_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        tk.Label(chat_frame, text="Chat", font=("Arial", 14)).pack(anchor="nw", padx=5, pady=5)
+
+        self.chat_display = scrolledtext.ScrolledText(chat_frame, wrap=tk.WORD, state='disabled', height=20, width=30)
+        self.chat_display.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        self.chat_input = tk.Entry(chat_frame, width=20)
+        self.chat_input.pack(pady=5)
+
+        tk.Button(chat_frame, text="Send Chat", command=self.send_chat_message, width=20, height=2, font=("Arial", 12)).pack(pady=5)
 
         self.running = True
-        self.receive_thread = threading.Thread(target=self.receive_messages, daemon=True)
-        self.receive_thread.start()
+        threading.Thread(target=self.receive_messages, daemon=True).start()  # 單一線程負責接收所有訊息
+        threading.Thread(target=self.process_game_queue, daemon=True).start()  # 處理遊戲訊息的隊列
+        threading.Thread(target=self.process_chat_queue, daemon=True).start()  # 處理聊天訊息的隊列
 
-    def send_response(self):
-        """發送聊天訊息"""
-        response = self.user_input.get().strip()
+    def send_game_messages(self):
+        """發送遊戲訊息"""
+        response = self.game_input.get().strip()  # 使用 game_input
         if response:
             self.client.send(response.encode())
-            self.user_input.delete(0, tk.END)
+            self.game_input.delete(0, tk.END)  # 清除 game_input
+
+    def send_chat_message(self):
+        """發送聊天訊息"""
+        chat_message = self.chat_input.get().strip()  # 使用 chat_input
+        if chat_message:
+            self.client.send(f"[CHAT]{chat_message}".encode())
+            self.chat_input.delete(0, tk.END)  # 清除 chat_input
 
     def receive_messages(self):
-        """接收聊天訊息"""
+        """統一接收訊息，並分派到不同的隊列"""
         try:
             while self.running:
                 message = self.client.recv(1024).decode()
                 if not message:
                     break
-
-                if "[PROMPT] Do you want to play again?" in message:
+                
+                # 根據訊息類型將訊息放入不同的隊列
+                if message.startswith("[CHAT]"):
+                    self.chat_queue.put(message[2:].strip())  # 聊天訊息
+                elif "[PROMPT] Do you want to play again?" in message:
                     self.append_message(message.strip())
                     response = messagebox.askyesno("Game Over", "Do you want to play again?")
                     self.client.send("yes".encode() if response else "no".encode())
@@ -183,7 +223,8 @@ class ClientGUI:
                     self.reset_to_main_menu()  # 返回主選單
                     break  # 結束接收循環
                 else:
-                    self.append_message(message.strip())
+                    self.game_queue.put(message.strip())  # 遊戲訊息
+
         except Exception as e:
             self.append_message(f"[ERROR] {e}")
         finally:
@@ -198,8 +239,27 @@ class ClientGUI:
         self.create_main_menu()  # 重新建立主選單
 
 
+    def process_game_queue(self):
+        """處理遊戲訊息"""
+        while self.running:
+            message = self.game_queue.get()
+            self.append_message(message)
+
+    def process_chat_queue(self):
+        """處理聊天訊息"""
+        while self.running:
+            message = self.chat_queue.get()
+            self.append_chat_message(message)
+
     def append_message(self, message):
-        """將訊息附加到聊天區域"""
+        """將訊息附加到遊戲訊息接收區域"""
+        self.game_display.config(state='normal')
+        self.game_display.insert(tk.END, message + '\n')
+        self.game_display.config(state='disabled')
+        self.game_display.see(tk.END)
+
+    def append_chat_message(self, message):
+        """將訊息附加到聊天訊息接收區域"""
         self.chat_display.config(state='normal')
         self.chat_display.insert(tk.END, message + '\n')
         self.chat_display.config(state='disabled')
