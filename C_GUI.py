@@ -213,7 +213,7 @@ class ClientGUI:
                 
                 # 根據訊息類型將訊息放入不同的隊列
                 if message.startswith("[CHAT]"):
-                    self.chat_queue.put(message[2:].strip())  # 聊天訊息
+                    self.chat_queue.put(message[6:].strip())  # 聊天訊息
                 elif "[PROMPT] Do you want to play again?" in message:
                     self.append_message(message.strip())
                     response = messagebox.askyesno("Game Over", "Do you want to play again?")
