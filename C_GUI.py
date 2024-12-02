@@ -58,7 +58,7 @@ class ClientGUI:
         while True:
             message = self.client.recv(1024).decode()
             if "The game is starting." in message:
-                self.enter_chat()  # 切換到遊戲畫面
+                self.enter_game()  # 切換到遊戲畫面
                 break
 
     def login(self):
@@ -143,12 +143,12 @@ class ClientGUI:
         else:
             messagebox.showerror("Invalid Input", "Username or password is invalid.")
 
-    def enter_chat(self):
+    def enter_game(self):
         """進入遊玩介面"""
         self.clear_window()
 
-        self.chat_display = scrolledtext.ScrolledText(self.master, wrap=tk.WORD, state='disabled', height=20, width=50)
-        self.chat_display.pack(padx=10, pady=10)
+        self.game_display = scrolledtext.ScrolledText(self.master, wrap=tk.WORD, state='disabled', height=20, width=50)
+        self.game_display.pack(padx=10, pady=10)
 
         self.user_input = tk.Entry(self.master, width=40)
         self.user_input.pack(pady=5)
@@ -200,10 +200,10 @@ class ClientGUI:
 
     def append_message(self, message):
         """將訊息附加到聊天區域"""
-        self.chat_display.config(state='normal')
-        self.chat_display.insert(tk.END, message + '\n')
-        self.chat_display.config(state='disabled')
-        self.chat_display.see(tk.END)
+        self.game_display.config(state='normal')
+        self.game_display.insert(tk.END, message + '\n')
+        self.game_display.config(state='disabled')
+        self.game_display.see(tk.END)
 
     def clear_window(self):
         """清除視窗內容"""
